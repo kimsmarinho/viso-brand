@@ -1,7 +1,7 @@
 // sigtap/gerar.test.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
@@ -50,4 +50,16 @@ test('linha fora do formato não entra', () => {
   const d = mkdtempSync(join(tmpdir(), 'sigtap-'))
   const z = zipCom(d, 'TabelaUnificada_202610_v1.zip', ['ABC', linha('040703002X', 'LIXO', '202610')])
   assert.equal(gerar([z], '').manifesto.linhas, 0)
+})
+
+test('bytes windows-1252 (0x96, 0x93, 0x94) viram travessão e aspas curvas', () => {
+  const d = mkdtempSync(join(tmpdir(), 'sigtap-'))
+  const cab = Buffer.from('0101010010', 'latin1')
+  const nome = Buffer.concat([Buffer.from('A', 'latin1'), Buffer.from([0x96]), Buffer.from('B ', 'latin1'), Buffer.from([0x93]), Buffer.from('C', 'latin1'), Buffer.from([0x94])])
+  const resto = Buffer.from(' '.repeat(250 - nome.length) + ' '.repeat(70) + '202610', 'latin1')
+  const txt = join(d, 'tb_procedimento.txt')
+  writeFileSync(txt, Buffer.concat([cab, nome, resto, Buffer.from('\r\n')]))
+  const z = join(d, 'TabelaUnificada_202610_v1.zip')
+  execFileSync('zip', ['-j', '-q', z, txt])
+  assert.equal(gerar([z], '').tsv, '0101010010\tA–B “C”\n')
 })

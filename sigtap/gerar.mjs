@@ -1,6 +1,6 @@
 // sigtap/gerar.mjs — gera sigtap/sigtap.tsv e sigtap/atual.json a partir dos zips oficiais do DATASUS.
 // Fonte: ftp://ftp2.datasus.gov.br/pub/sistemas/tup/downloads/ (CC BY 3.0, Ministério da Saúde).
-// tb_procedimento.txt: largura fixa, latin1, CRLF; código nas colunas 1–10, nome 11–260, competência 331–336.
+// tb_procedimento.txt: largura fixa, windows-1252, CRLF; código nas colunas 1–10, nome 11–260, competência 331–336.
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -14,8 +14,9 @@ export function ck(s) {
 function lerZip(caminho) {
   const bruto = execFileSync('unzip', ['-p', caminho, 'tb_procedimento.txt'], { maxBuffer: 64 * 1024 * 1024 })
   const pares = []
+  const texto = new TextDecoder('windows-1252').decode(bruto)
   let competencia = ''
-  for (const l of bruto.toString('latin1').split(/\r?\n/)) {
+  for (const l of texto.split(/\r?\n/)) {
     const cod = l.slice(0, 10)
     const nome = l.slice(10, 260).replace(/[\t\r\n]+/g, ' ').trim()
     if (!/^\d{10}$/.test(cod) || !nome) continue
