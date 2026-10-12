@@ -1,0 +1,46 @@
+name: SIGTAP mensal
+on:
+  schedule:
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+    inputs:
+      forcar:
+        description: 'Baixar e regerar mesmo com a competencia igual'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Competencia mais nova no RSS oficial
+        id: rss
+        run: |
+          curl -sS --compressed --max-time 60 http://sigtap.datasus.gov.br/tabela-unificada/competencias.rss > rss.xml
+          url=$(grep -o 'ftp://ftp2.datasus.gov.br/pub/sistemas/tup/downloads/TabelaUnificada_[0-9]*_v[0-9]*\.zip' rss.xml | head -1)
+          comp=$(echo "$url" | sed -E 's/.*TabelaUnificada_([0-9]{6})_.*/\1/')
+          atual=$(node -e "console.log(require('./sigtap/atual.json').competencia)")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "nova=$([ -n "$comp" ] && [ "$comp" \> "$atual" ] && echo sim || echo nao)" >> "$GITHUB_OUTPUT"
+      - name: Baixar e gerar
+        if: steps.rss.outputs.nova == 'sim' || inputs.forcar
+        run: |
+          mkdir -p /tmp/zip
+          curl -sS --max-time 600 -o /tmp/zip/t.zip "${{ steps.rss.outputs.url }}"
+          node sigtap/gerar.mjs /tmp/zip/t.zip
+      - name: Publicar
+        if: steps.rss.outputs.nova == 'sim' || inputs.forcar
+        run: |
+          git config user.name "sigtap-bot"
+          git config user.email "sigtap-bot@users.noreply.github.com"
+          git diff --quiet -- sigtap/ || {
+            git add sigtap/sigtap.tsv sigtap/atual.json
+            git commit -m "SIGTAP: competência $(node -e "console.log(require('./sigtap/atual.json').competencia)")"
+            git push
+          }
