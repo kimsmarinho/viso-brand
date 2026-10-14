@@ -1,0 +1,30 @@
+name: Operadoras ANS semanal
+on:
+  schedule:
+    - cron: '0 11 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Baixar a lista de operadoras ativas e gerar
+        run: |
+          curl -sS --fail --max-time 120 -o /tmp/cadop.csv \
+            https://dadosabertos.ans.gov.br/FTP/PDA/operadoras_de_plano_de_saude_ativas/Relatorio_cadop.csv
+          node ans/gerar.mjs /tmp/cadop.csv
+      - name: Publicar
+        run: |
+          git config user.name "ans-bot"
+          git config user.email "ans-bot@users.noreply.github.com"
+          git add ans/operadoras.tsv ans/atual.json
+          git diff --cached --quiet || {
+            git commit -m "ANS: lista de operadoras ($(node -e "console.log(require('./ans/atual.json').linhas)") registros)"
+            git push
+          }
